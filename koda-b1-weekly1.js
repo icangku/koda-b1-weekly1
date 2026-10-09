@@ -81,7 +81,7 @@ function generateFoodMenu(foods, callback) {
   let i = 0;
   let menus = "";
   do {
-    menus += `\n${foods[i].id}. ${foods[i].name}\n${rupiah(foods[i].price)},-\n`;
+    menus += `\n${foods[i].id.toString().padEnd(4)} ${foods[i].name.toString().padEnd(50)}${rupiah(foods[i].price.toString().padEnd(5))},-`;
     i++;
   } while (i < foods.length);
 
@@ -98,6 +98,7 @@ const generateMainMenu = function () {
     1. Dishes
     2. Checkout
     3. Exit
+    4. Customers 
   `);
 };
 const prepareCheckout = (callback) => {
@@ -148,12 +149,29 @@ const generateCartItem = (name) => {
 
   isExit = true;
 };
-const menuAfterOrder = () => {
-  isMainMenu = true;
+const getListCustomer = async () => {
+  const url = "https://jsonplaceholder.typicode.com/users";
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+
+    data.forEach((item) => {
+      console.log(
+        `${item.name.padEnd(4)}\n${item.email.padEnd(4)}\n${item.phone}`,
+      );
+    });
+  } catch (error) {
+    console.log(error);
+  }
 };
 
-function menuHub(menu) {
+async function menuHub(menu) {
   switch (menu) {
+    case 4:
+      isMainMenu = false;
+      await getListCustomer();
+      break;
     case 3:
       isExit = true;
       isMainMenu = false;
@@ -171,10 +189,14 @@ function menuHub(menu) {
   }
 }
 
-while (!isExit) {
-  if (isMainMenu) {
-    generateMainMenu();
-    var choosenMenu = readlineSync.questionInt("Please choose a menu:");
-    menuHub(choosenMenu);
+const mainApp = async () => {
+  while (!isExit) {
+    if (isMainMenu) {
+      generateMainMenu();
+      var choosenMenu = readlineSync.questionInt("Please choose a menu:");
+      await menuHub(choosenMenu);
+    }
   }
-}
+};
+
+mainApp();
