@@ -158,7 +158,7 @@ const getListCustomer = async () => {
 
     data.forEach((item) => {
       console.log(
-        `${item.name.padEnd(4)}\n${item.email.padEnd(4)}\n${item.phone}`,
+        `Name:${item.name.padEnd(4)}\nEmail:${item.email.padEnd(4)}Phone:\n${item.phone}\n\n`,
       );
     });
   } catch (error) {
