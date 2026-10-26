@@ -1,4 +1,5 @@
 const readlineSync = require("readline-sync");
+
 const dishes = [
   {
     id: 1,
@@ -52,150 +53,226 @@ const dishes = [
   },
 ];
 
-let cart = { items: [] };
+const MAX_QTY = 99;
+
+let cart = {
+  customer: {
+    name: "",
+  },
+  items: [],
+};
+
 let isExit = false;
-let isMainMenu = true;
+
+const rupiahFormatter = new Intl.NumberFormat("id-ID", {
+  style: "currency",
+  currency: "IDR",
+  maximumFractionDigits: 0,
+});
 
 function rupiah(price) {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-  }).format(price);
+  return rupiahFormatter.format(price);
 }
-function addToCart(chosenFood, qty) {
-  cart.items.push({ id: chosenFood, qty: qty });
-  var wantToCheckout = readlineSync.question("Do you want to checkout? (Y/N) ");
-  switch (wantToCheckout) {
-    case "Y":
-      menuHub(2);
-      break;
-    case "N":
-      menuHub(1);
-      break;
-    default:
-      menuHub(1);
-      break;
+
+const findDish = (foodID) => dishes.find(({ id: dishId }) => dishId === foodID);
+
+function askDish() {
+  while (true) {
+    const chosenFood = readlineSync.questionInt(
+      "Please choose food you wish to enjoy (or 0 to cancel): ",
+    );
+    if (chosenFood === 0) return null;
+
+    const dish = findDish(chosenFood);
+    if (dish) return dish;
+
+    console.log(
+      `Invalid choice: menu ${chosenFood} is not available. Please choose between 1 and ${dishes.length}, or 0 to cancel.`,
+    );
   }
 }
-function generateFoodMenu(foods, callback) {
-  let i = 0;
-  let menus = "";
-  do {
-    menus += `\n${foods[i].id.toString().padEnd(4)} ${foods[i].name.toString().padEnd(50)}${rupiah(foods[i].price.toString().padEnd(5))},-`;
-    i++;
-  } while (i < foods.length);
 
-  console.log(menus);
-  var chosenFood = readlineSync.questionInt(
-    "Please choose food you wish to enjoy: ",
-  );
-  var qty = readlineSync.questionInt("How many do you want? ");
-  callback(chosenFood, qty);
+function askQty() {
+  while (true) {
+    const qty = readlineSync.questionInt(
+      `How many do you want? (1-${MAX_QTY}): `,
+    );
+    if (qty >= 1 && qty <= MAX_QTY) return qty;
+    console.log(`Invalid quantity. Quantity must be between 1 and ${MAX_QTY}.`);
+  }
 }
+
+function addToCart(dish, qty) {
+  const { id: targetId } = dish;
+  const existingItem = cart.items.find(
+    ({ dish: { id: itemDishId } }) => itemDishId === targetId,
+  );
+
+  if (existingItem) {
+    existingItem.qty = Math.min(existingItem.qty + qty, MAX_QTY);
+  } else {
+    cart.items.push({ dish, qty });
+  }
+}
+
+function generateFoodMenu(foods) {
+  let menus = "\n================== MENU DISHES ==================\n";
+  for (const { id: foodId, name: foodName, price: foodPrice } of foods) {
+    menus += `${String(foodId).padEnd(4)} ${foodName.padEnd(40)} ${rupiah(foodPrice).padStart(14)}\n`;
+  }
+  menus += "=================================================\n";
+  menus += "0.   Back to Main Menu\n";
+  console.log(menus);
+}
+
+function orderDishes() {
+  generateFoodMenu(dishes);
+  const dish = askDish();
+  if (!dish) {
+    console.log("\nOrder cancelled. Returning to main menu.");
+    return;
+  }
+
+  const qty = askQty();
+  addToCart(dish, qty);
+
+  const { name: dishName } = dish;
+  console.log(`\nSuccessfully added: ${dishName} (x${qty}) to cart.`);
+
+  if (readlineSync.keyInYNStrict("Do you want to checkout now?")) {
+    checkout();
+  }
+}
+
 const generateMainMenu = function () {
   console.log(`
-    Welcome to Taburai\n
-    1. Dishes
-    2. Checkout
-    3. Exit
-    4. Customers 
-  `);
+================ TABURAI RESTAURANT ================
+  1. Dishes
+  2. Checkout
+  3. Exit
+  4. Customers
+====================================================
+`);
 };
-const prepareCheckout = (callback) => {
-  if (typeof cart.items[0] === "object") {
-    var name = readlineSync.question("Whose order is this? ");
-    callback(name);
-  } else {
-    console.log("\nYou haven't ordered yet. Please order something first.");
-    menuHub(1);
-  }
-};
-const findDish = (foodID) => {
-  let isFound = false;
-  let i = 0;
-  let food = {};
-  while (!isFound) {
-    if (foodID === dishes[i].id) {
-      isFound = true;
-      food = dishes[i];
-    }
-    i++;
-  }
-  return food;
-};
-const generateCartItem = (name) => {
-  cart = { ...cart, name: name };
-  let i = 0;
-  let items = "\n\n";
-  let total = 0;
-  while (i <= cart.items.length - 1) {
-    const item = cart.items[i];
-    const food = findDish(item.id);
-    const subTotal = cart.items[i].qty * food.price;
 
-    const indexStr = `${i + 1}.`.padEnd(4);
-    const nameStr = food.name.padEnd(20);
-    const qtyStr = `(x${item.qty})`.padEnd(8);
-    const priceStr = rupiah(food.price).padStart(12);
+const checkout = () => {
+  if (cart.items.length === 0) {
+    console.log("\nYou haven't ordered yet. Please order something first.");
+    return;
+  }
+
+  let customerName = readlineSync.question("Whose order is this? ").trim();
+  while (!customerName) {
+    console.log("Customer name cannot be empty. Please enter your name.");
+    customerName = readlineSync.question("Whose order is this? ").trim();
+  }
+
+  generateCartItem(customerName);
+};
+
+const generateCartItem = (customerName) => {
+  cart = {
+    ...cart,
+    customer: { name: customerName },
+  };
+
+  const {
+    customer: { name: buyerName },
+    items: cartItems,
+  } = cart;
+
+  let receipt = "\n==================== RECEIPT ====================\n";
+  let total = 0;
+
+  for (const [
+    index,
+    {
+      dish: { name: dishName, price: unitPrice },
+      qty: orderQty,
+    },
+  ] of cartItems.entries()) {
+    const subTotal = orderQty * unitPrice;
+
+    const indexStr = `${index + 1}.`.padEnd(4);
+    const nameStr = dishName.padEnd(25);
+    const qtyStr = `(x${orderQty})`.padEnd(8);
+    const priceStr = rupiah(unitPrice).padStart(12);
     const totalStr = rupiah(subTotal).padStart(14);
 
-    items += `${indexStr}${nameStr}${qtyStr}${priceStr}${totalStr}\n`;
+    receipt += `${indexStr}${nameStr}${qtyStr}${priceStr}${totalStr}\n`;
     total += subTotal;
-    i++;
   }
-  items += `\n\nTotal.....................................${rupiah(total)},-\n\n\n`;
-  items += `Thank you for ordering here ${cart.name}, see your next visit!`;
-  console.log(items);
 
+  receipt += "=================================================\n";
+  receipt += `Total Price: ${rupiah(total).padStart(36)}\n`;
+  receipt += "=================================================\n";
+  receipt += `Thank you for ordering here, ${buyerName}! See you on your next visit!\n`;
+
+  console.log(receipt);
   isExit = true;
 };
+
 const getListCustomer = async () => {
   const url = "https://jsonplaceholder.typicode.com/users";
 
   try {
     const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`Request failed with status ${res.status}`);
+    }
     const data = await res.json();
 
-    data.forEach((item) => {
-      console.log(
-        `Name:${item.name.padEnd(4)}\nEmail:${item.email.padEnd(4)}Phone:\n${item.phone}\n\n`,
-      );
-    });
+    console.log("\n================ CUSTOMER DIRECTORY ================\n");
+    data.forEach(
+      ({
+        name: customerName,
+        email: customerEmail,
+        phone: customerPhone,
+        address: { city: customerCity } = {},
+        company: { name: companyName } = {},
+      }) => {
+        console.log(`Name    : ${customerName}`);
+        console.log(`Email   : ${customerEmail}`);
+        console.log(`Phone   : ${customerPhone}`);
+        console.log(`City    : ${customerCity}`);
+        console.log(`Company : ${companyName}`);
+        console.log("----------------------------------------------------");
+      },
+    );
   } catch (error) {
-    console.log(error);
+    console.log(`Failed to load customers: ${error.message}`);
   }
+
+  readlineSync.question("\nPress Enter to return to the main menu...");
 };
 
 async function menuHub(menu) {
   switch (menu) {
-    case 4:
-      isMainMenu = false;
-      await getListCustomer();
-      break;
-    case 3:
-      isExit = true;
-      isMainMenu = false;
+    case 1:
+      orderDishes();
       break;
     case 2:
-      isMainMenu = false;
-      prepareCheckout(generateCartItem);
+      checkout();
       break;
-    case 1:
-      generateFoodMenu(dishes, addToCart);
-      isMainMenu = false;
+    case 3:
+      console.log("\nThank you for visiting Taburai! Goodbye.");
+      isExit = true;
+      break;
+    case 4:
+      await getListCustomer();
       break;
     default:
-      isMainMenu = true;
+      console.log(
+        `\nInvalid choice "${menu}". Please choose a menu from 1 to 4.`,
+      );
   }
 }
 
 const mainApp = async () => {
   while (!isExit) {
-    if (isMainMenu) {
-      generateMainMenu();
-      var choosenMenu = readlineSync.questionInt("Please choose a menu:");
-      await menuHub(choosenMenu);
-    }
+    generateMainMenu();
+    const chosenMenu = readlineSync.questionInt("Please choose a menu: ");
+    await menuHub(chosenMenu);
   }
 };
 
